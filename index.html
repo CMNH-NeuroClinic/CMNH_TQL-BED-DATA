@@ -205,6 +205,8 @@
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef } = React;
 const POLL_MS = 7000;
+const API_URL = "https://script.google.com/macros/s/AKfycbxxy23lJ4uK5j4LylgTofeO4o95676xHCJTxk9T6W5E6pFOwXfQ6f13lNLAyWFG3DFX3A/exec";
+const API_KEY = "1234567890"; // ต้องตรงกับ SECRET_KEY ใน Code.gs
 
 const Icon = {
   Heart: (p) => <svg width={p.size||14} height={p.size||14} viewBox="0 0 24 24" fill={p.color||"#1E3A5F"} stroke="none"><path d="M12 21s-7.5-4.6-10-9.3C.4 8.1 2.3 4 6.2 4c2 0 3.7 1.1 4.8 2.8C12.1 5.1 13.8 4 15.8 4c3.9 0 5.8 4.1 4.2 7.7C19.5 16.4 12 21 12 21z"/></svg>,
@@ -436,32 +438,27 @@ function App() {
   const [saving, setSaving] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [connError, setConnError] = useState(false);
-  const [apiUrl, setApiUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [apiUrlDraft, setApiUrlDraft] = useState("");
-  const [apiKeyDraft, setApiKeyDraft] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
   const [expandedBeds, setExpandedBeds] = useState(() => new Set());
   const [confirmDelete, setConfirmDelete] = useState(null); // {buildingId, zoneId, bed}
   const buildingsRef = useRef(null);
   const writeTimer = useRef(null);
-  const connected = !!(apiUrl && apiKey);
+  const connected = true;
 
   useEffect(() => { buildingsRef.current = buildings; }, [buildings]);
   useEffect(() => { const t = setInterval(()=>setBuildings((b)=>b?[...b]:b), 30000); return ()=>clearInterval(t); }, []);
 
   async function fetchData() {
-    const res = await fetch(`${apiUrl}?key=${encodeURIComponent(apiKey)}`);
+    const res = await fetch(`${API_URL}?key=${encodeURIComponent(API_KEY)}`);
     if (!res.ok) throw new Error("fetch failed");
     const data = await res.json();
     if (data && data.ok === false) throw new Error(data.error || "request failed");
     return data;
   }
   async function postAction(payload) {
-    const res = await fetch(apiUrl, {
+    const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" }, // avoids Apps Script CORS preflight issue
-      body: JSON.stringify({ key: apiKey, ...payload }),
+      body: JSON.stringify({ key: API_KEY, ...payload }),
     });
     const data = await res.json().catch(() => null);
     if (!data || data.ok === false) throw new Error((data && data.error) || "request failed");
@@ -486,7 +483,7 @@ function App() {
     load(true);
     const t = setInterval(() => load(false), POLL_MS);
     return () => { cancelled = true; clearInterval(t); };
-  }, [apiUrl, apiKey]);
+  }, []);
 
   async function sendAction(payload) {
     if (!connected) return;
@@ -608,27 +605,12 @@ function App() {
               <div className="count-label">เตียงว่างรวม</div>
               <div className="count-value disp"><Icon.Heart size={15} />{overall.available}<span className="count-total">/{overall.total}</span></div>
             </div>
-            <button className="icon-btn3d" onClick={()=>setShowSettings((s)=>!s)} title="ตั้งค่าการเชื่อมต่อ"><Icon.Settings size={16} /></button>
             <button className="icon-btn3d" onClick={manualRefresh}><Icon.Refresh size={15} className={saving?"spin":""} /></button>
           </div>
         </div>
       </div>
 
-      {showSettings && (
-        <div className="settings-panel" style={{ flexDirection: "column", alignItems: "stretch" }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ alignSelf: "center" }}>Apps Script URL:</span>
-            <input value={apiUrlDraft} onChange={(e)=>setApiUrlDraft(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" />
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-            <span style={{ alignSelf: "center" }}>Secret Key:</span>
-            <input value={apiKeyDraft} onChange={(e)=>setApiKeyDraft(e.target.value)} placeholder="ต้องตรงกับ SECRET_KEY ใน Code.gs" type="password" />
-            <button onClick={()=>{ setApiUrl(apiUrlDraft.trim()); setApiKey(apiKeyDraft.trim()); setShowSettings(false); }}>เชื่อมต่อ</button>
-          </div>
-        </div>
-      )}
-      {!connected && <div className="banner banner-warn">โหมดพรีวิว — ยังไม่ได้เชื่อมต่อ Google Sheets ข้อมูลจะไม่ถูกบันทึกจริง (กดไอคอนดินสอเพื่อใส่ URL และ Secret Key)</div>}
-      {connected && connError && <div className="banner banner-warn">เชื่อมต่อ Google Sheet ไม่ได้ชั่วคราว — ตรวจสอบ URL, Secret Key ให้ตรงกับ Code.gs และการตั้งค่า Apps Script deployment</div>}
+      {connError && <div className="banner banner-warn">เชื่อมต่อ Google Sheet ไม่ได้ชั่วคราว — ตรวจสอบการตั้งค่า Apps Script deployment</div>}
 
       <div className="strip">
         <button onClick={()=>setActiveId("__dashboard__")} className={`branch-pill dash-pill ${activeId==="__dashboard__"?"active":""}`}>
