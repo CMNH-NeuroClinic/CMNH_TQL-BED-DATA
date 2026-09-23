@@ -648,6 +648,7 @@ function App() {
   const [addZoneFor, setAddZoneFor] = useState(null); // buildingId
   const [confirmDeleteZone, setConfirmDeleteZone] = useState(null); // {buildingId, zoneId, zoneName, bedCount, hasOccupied}
   const buildingsRef = useRef(null);
+  const skipPollUntil = useRef(0);
   const writeTimer = useRef(null);
   const connected = true;
 
@@ -676,10 +677,21 @@ function App() {
     if (!connected) { if (!buildingsRef.current) setBuildings(seedData()); return; }
     let cancelled = false;
     async function load(initial) {
+      // เว้นรอบโพลนี้ไปก่อน ถ้าเพิ่งมีการกดแก้ไขสดไม่นานมานี้ — กันข้อมูลที่ชีทยังเขียนไม่ทันมาทับของที่เพิ่งกด
+      if (!initial && Date.now() < skipPollUntil.current) return;
       try {
         const data = await fetchData();
         if (cancelled) return;
-        if (Array.isArray(data) && data.length > 0) setBuildings(data);
+        if (Array.isArray(data) && data.length > 0) {
+          setBuildings((prev) => {
+            if (prev) {
+              const prevStr = JSON.stringify(prev.map(({ updatedAt, ...rest }) => rest));
+              const nextStr = JSON.stringify(data.map(({ updatedAt, ...rest }) => rest));
+              if (prevStr === nextStr) return prev; // ข้อมูลเหมือนเดิมทุกอย่าง ไม่ต้อง re-render ทับให้จอกระพริบ
+            }
+            return data;
+          });
+        }
         else if (initial) { const seed = seedData(); setBuildings(seed); postAction({ action: "replaceAll", buildings: seed }).catch(console.error); }
         setLastSync(new Date()); setConnError(false);
       } catch (e) {
@@ -694,6 +706,7 @@ function App() {
 
   async function sendAction(payload) {
     if (!connected) return;
+    skipPollUntil.current = Date.now() + 6000;
     setSaving(true);
     try { await postAction(payload); setLastSync(new Date()); setConnError(false); }
     catch (e) { console.error(e); setConnError(true); }
