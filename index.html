@@ -34,8 +34,8 @@
       inset 1px 1px 2px rgba(255,255,255,.7), inset -2px -2px 5px rgba(96,153,204,.12); }
   .icon-btn3d:active { transform: translateY(1px); }
 
-  .banner { font-size:12px; text-align:center; padding:6px 12px; margin:8px 12px 0; border-radius:14px; }
-  .banner-warn { background:#FFF3D6; color:#92400E; }
+  .banner { font-size:12px; text-align:center; padding:8px 12px; margin:8px 12px 0; border-radius:14px; display:flex; align-items:center; justify-content:center; gap:6px; }
+  .banner-warn { background:#FEE2E2; color:#991B1B; font-weight:700; border:2px solid #FCA5A5; }
   .settings-panel { display:flex; gap:8px; align-items:center; font-size:12px; flex-wrap:wrap; padding:10px 16px; margin:8px 12px 0;
     border-radius:18px; background: linear-gradient(150deg,#ffffff,#F0F4FA);
     box-shadow: 5px 5px 12px rgba(148,163,184,.25), -5px -5px 12px rgba(255,255,255,.9); }
@@ -65,6 +65,7 @@
   .content { position:relative; flex:1; min-height:0; overflow-y:auto; }
   .loading { height:100%; display:flex; align-items:center; justify-content:center; color:#78716c; gap:10px; }
   .zone-grid { padding:12px; display:grid; grid-template-columns:1fr; gap:14px; padding-bottom:80px; }
+  .zone-grid.locked { opacity:.5; pointer-events:none; }
   @media (min-width:640px) { .zone-grid { grid-template-columns:1fr 1fr; } }
 
   .dash-pill { min-width:120px; }
@@ -185,6 +186,7 @@
     box-shadow: 4px 4px 10px rgba(30,140,90,.4), inset 1px 1px 2px rgba(255,255,255,.5); }
   .btn-danger { background: linear-gradient(150deg,#FF9AA6,#E11D48); color:#ffffff; font-weight:700;
     box-shadow: 4px 4px 10px rgba(190,20,50,.4), inset 1px 1px 2px rgba(255,255,255,.4); }
+  .staytype-primary { flex:1.3; font-size:15px; font-weight:800; padding:15px; }
 
   .modal-overlay { position:fixed; inset:0; background:rgba(30,41,59,.45); display:flex; align-items:center; justify-content:center;
     z-index:50; padding:20px; }
@@ -206,6 +208,15 @@
   .stay-chip.overnight { background: linear-gradient(150deg,#DCEAFE,#B9D6FC); color:#1D4E8F; }
   .stay-chip.daytrip { background: linear-gradient(150deg,#FDE9CE,#FBCE8F); color:#8A4E0B; }
   .num-input { width:64px; }
+
+  .search-input { width:100%; border:none; border-radius:14px; padding:10px 14px; font-size:13px;
+    background: linear-gradient(150deg,#ffffff,#F1F0FA); box-shadow: inset 2px 2px 5px rgba(148,163,184,.25); }
+  .search-result-row { text-align:left; width:100%; border:none; border-radius:14px; padding:10px 12px; cursor:pointer;
+    background: linear-gradient(150deg,#ffffff,#F3F5F9); display:flex; flex-direction:column; gap:2px;
+    box-shadow: 3px 3px 8px rgba(148,163,184,.25), -3px -3px 8px rgba(255,255,255,.9); }
+  .history-row { background: linear-gradient(150deg,#ffffff,#F3F5F9); border-radius:18px; padding:12px 14px;
+    box-shadow: 4px 4px 10px rgba(148,163,184,.25), -4px -4px 10px rgba(255,255,255,.9); }
+  .collapse-head { display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
 
   .appfoot { padding:6px 16px; text-align:center; font-size:10px; color:#64748B; }
   .spin { animation: spin 1s linear infinite; }
@@ -234,6 +245,8 @@ const Icon = {
   Chevron: (p) => <svg width={p.size||14} height={p.size||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{transform: p.open ? "rotate(180deg)" : "none", transition:"transform .15s"}}><path d="M6 9l6 6 6-6"/></svg>,
   Alert: (p) => <svg width={p.size||20} height={p.size||20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>,
   Chart: (p) => <svg width={p.size||11} height={p.size||11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>,
+  Search: (p) => <svg width={p.size||14} height={p.size||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>,
+  History: (p) => <svg width={p.size||15} height={p.size||15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 109-9 9 9 0 00-7.5 4"/><path d="M3 4v5h5"/><path d="M12 7v5l4 2"/></svg>,
 };
 
 function genBeds(total, availableCount, prefix) {
@@ -292,6 +305,7 @@ function zoneCounts(zone) {
 }
 function buildingCounts(b) { return b.zones.reduce((a,z)=>{const c=zoneCounts(z);return {total:a.total+c.total, available:a.available+c.available};},{total:0,available:0}); }
 function overallCounts(bs) { return bs.reduce((a,b)=>{const c=buildingCounts(b);return {total:a.total+c.total, available:a.available+c.available};},{total:0,available:0}); }
+function getLastStayType() { try { return localStorage.getItem("lastStayType") || "overnight"; } catch (e) { return "overnight"; } }
 
 function formatUpdated(iso) {
   if (!iso) return "ยังไม่มีการอัปเดต";
@@ -307,6 +321,12 @@ function formatUpdatedFull(iso) {
   if (!iso) return "ยังไม่มีการอัปเดตข้อมูล";
   return new Date(iso).toLocaleString("th-TH", { day:"numeric", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }) + " น.";
 }
+function toLocalInputValue(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 const TAG_META = {
   common: { label: "โซนรวม", cls: "" },
@@ -314,8 +334,8 @@ const TAG_META = {
   daycare: { label: "Day-care", cls: "daycare" },
 };
 
-function Toggle({ checked, onClick }) {
-  return <button onClick={onClick} className={`toggle3d ${checked?"on":"off"}`} aria-label="สลับสถานะเตียง"><span className="thumb" /></button>;
+function Toggle({ checked, onClick, disabled }) {
+  return <button onClick={disabled?undefined:onClick} disabled={disabled} className={`toggle3d ${checked?"on":"off"}`} aria-label="สลับสถานะเตียง" style={disabled?{opacity:.5,cursor:"not-allowed"}:undefined}><span className="thumb" /></button>;
 }
 
 function BedTile({ bed, onToggle, onNameChange, onNameBlur, onToggleTag, onStayTypeChange, expanded, onToggleExpand }) {
@@ -528,8 +548,11 @@ function Dashboard({ buildings, onSelectBranch }) {
   const [logs, setLogs] = useState(null);
   const [logLoading, setLogLoading] = useState(false);
   const [logError, setLogError] = useState(false);
+  const [monthlyOpen, setMonthlyOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
+    if (!monthlyOpen) return; // โหลดเฉพาะตอนกางส่วนนี้ออกมาดู ไม่ต้องดึงข้อมูลทุกครั้งที่เข้าแดชบอร์ด
     let cancelled = false;
     async function loadLogs() {
       setLogLoading(true); setLogError(false);
@@ -546,12 +569,43 @@ function Dashboard({ buildings, onSelectBranch }) {
     }
     loadLogs();
     return () => { cancelled = true; };
-  }, [month]);
+  }, [month, monthlyOpen]);
 
   const summary = logs ? computeMonthlySummary(logs, buildings, month) : null;
 
+  const searchResults = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const out = [];
+    buildings.forEach((b) => b.zones.forEach((z) => z.beds.forEach((bed) => {
+      if (bed.patient && bed.patient.toLowerCase().includes(q)) {
+        out.push({ buildingId: b.id, buildingName: b.name, zoneName: z.name, bedLabel: bed.label, patient: bed.patient });
+      }
+    })));
+    return out;
+  }, [query, buildings]);
+
   return (
     <div className="dash-wrap">
+      <div className="dash-chart-card">
+        <div className="dash-chart-title"><Icon.Search size={12} /> ค้นหาผู้ป่วย</div>
+        <input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="พิมพ์ชื่อเล่นผู้ป่วย..." className="search-input" />
+        {query.trim() && (
+          searchResults.length === 0 ? (
+            <div style={{fontSize:12, color:"#94A3B8", marginTop:8}}>ไม่พบผู้ป่วยชื่อนี้ในทุกสาขา</div>
+          ) : (
+            <div style={{display:"flex", flexDirection:"column", gap:6, marginTop:8}}>
+              {searchResults.map((r,i) => (
+                <button key={i} className="search-result-row" onClick={() => onSelectBranch(r.buildingId)}>
+                  <span style={{fontWeight:700, fontSize:13}}>{r.patient}</span>
+                  <span style={{fontSize:11, color:"#64748B"}}>{r.buildingName} · {r.zoneName} · เตียง {r.bedLabel}</span>
+                </button>
+              ))}
+            </div>
+          )
+        )}
+      </div>
+
       <div className="dash-hero">
         <div className="dash-hero-num">
           <Icon.Heart size={22} color="#1E3A5F" />
@@ -603,16 +657,23 @@ function Dashboard({ buildings, onSelectBranch }) {
       </div>
 
       <div className="dash-chart-card">
-        <div className="dash-chart-title" style={{display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8}}>
-          <span>Occupancy Rate รายเดือน (สำหรับผู้บริหาร/บัญชี)</span>
-          <input type="month" value={month} onChange={(e)=>setMonth(e.target.value)} className="month-input" />
+        <div className="collapse-head" onClick={()=>setMonthlyOpen((v)=>!v)}>
+          <span className="dash-chart-title" style={{margin:0}}>สรุปรายเดือน / บิลลิ่ง (สำหรับผู้บริหาร-บัญชี)</span>
+          <Icon.Chevron size={14} open={monthlyOpen} />
         </div>
-        {logLoading ? (
-          <div style={{fontSize:12, color:"#94A3B8"}}>กำลังคำนวณ...</div>
-        ) : logError ? (
-          <div style={{fontSize:12, color:"#DC2626"}}>โหลดข้อมูลย้อนหลังไม่สำเร็จ — ตรวจสอบการเชื่อมต่อ</div>
-        ) : summary ? (
+        {!monthlyOpen ? (
+          <p className="drawer-note" style={{margin:"4px 0 0"}}>แตะเพื่อดู Occupancy Rate รายเดือน และดาวน์โหลด Excel สำหรับวางบิล</p>
+        ) : (
           <>
+            <div style={{display:"flex", alignItems:"center", justifyContent:"flex-end", marginTop:8}}>
+              <input type="month" value={month} onChange={(e)=>setMonth(e.target.value)} className="month-input" />
+            </div>
+            {logLoading ? (
+              <div style={{fontSize:12, color:"#94A3B8"}}>กำลังคำนวณ...</div>
+            ) : logError ? (
+              <div style={{fontSize:12, color:"#DC2626"}}>โหลดข้อมูลย้อนหลังไม่สำเร็จ — ตรวจสอบการเชื่อมต่อ</div>
+            ) : summary ? (
+              <>
             <div className="dash-occ-bar"><div className="dash-occ-fill" style={{ width: `${summary.overallRate}%` }} /></div>
             <div className="dash-occ-label">Occupancy Rate เดือนนี้ (รวมทุกสาขา): {summary.overallRate}%</div>
             {summary.byBuilding.map((bs) => (
@@ -628,8 +689,118 @@ function Dashboard({ buildings, onSelectBranch }) {
               <Icon.Chart size={14} /> ดาวน์โหลด Excel สำหรับวางบิล
             </button>
             <p className="drawer-note" style={{margin:0}}>เช้าเย็นกลับนับเป็น 0.5 วันในสูตร Occupancy Rate ส่วนไฟล์ Excel มี 2 ชีท: สรุปการเข้าพัก และสรุปรายวัน</p>
+              </>
+            ) : null}
           </>
-        ) : null}
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HistoryView() {
+  const [logs, setLogs] = useState(null);
+  const [error, setError] = useState(false);
+  const [editing, setEditing] = useState(null); // logId
+  const [form, setForm] = useState({});
+  const [savingId, setSavingId] = useState(null);
+
+  async function load() {
+    try {
+      const res = await fetch(`${API_URL}?key=${encodeURIComponent(API_KEY)}&action=recentLogs&limit=60`);
+      const data = await res.json();
+      if (data && data.ok !== false) { setLogs(data.logs || []); setError(false); }
+      else setError(true);
+    } catch (e) { setError(true); }
+  }
+  useEffect(() => { load(); }, []);
+
+  function startEdit(log) {
+    setEditing(log.logId);
+    setForm({
+      patient: log.patient || "",
+      stayType: log.stayType || "overnight",
+      checkInAt: toLocalInputValue(log.checkInAt),
+      checkOutAt: log.checkOutAt ? toLocalInputValue(log.checkOutAt) : "",
+    });
+  }
+  async function saveEdit(logId, hadCheckOut) {
+    setSavingId(logId);
+    try {
+      const patch = {
+        patient: form.patient,
+        stayType: form.stayType,
+        checkInAt: form.checkInAt ? new Date(form.checkInAt).toISOString() : undefined,
+      };
+      // เว้นว่างช่องเวลาออก = ยังไม่เช็คเอาท์ (ล้างค่า) — ถ้ามีการกรอกเวลาก็ส่งไปตามนั้น
+      if (form.checkOutAt) patch.checkOutAt = new Date(form.checkOutAt).toISOString();
+      else if (hadCheckOut) patch.checkOutAt = "";
+      const res = await fetch(API_URL, {
+        method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ key: API_KEY, action: "editLog", logId, patch }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!data || data.ok === false) throw new Error("save failed");
+      setEditing(null);
+      await load();
+    } catch (e) { alert("บันทึกไม่สำเร็จ ลองใหม่อีกครั้งครับ"); }
+    setSavingId(null);
+  }
+
+  return (
+    <div className="dash-wrap">
+      <div className="dash-chart-card">
+        <div className="dash-chart-title"><Icon.History size={13} /> ประวัติการเข้าพักล่าสุด (แก้ไขได้)</div>
+        <p className="drawer-note" style={{margin:"2px 0 4px"}}>แก้ไขตรงนี้ได้เลยถ้ากรอกชื่อ/ประเภท/เวลาผิดตอนบันทึกจริง — ไม่ต้องเข้าไปแก้ในชีทเอง</p>
+        {!logs ? (
+          <div style={{fontSize:12, color:"#94A3B8"}}>กำลังโหลด...</div>
+        ) : error ? (
+          <div style={{fontSize:12, color:"#DC2626"}}>โหลดข้อมูลไม่สำเร็จ — ตรวจสอบการเชื่อมต่อ</div>
+        ) : logs.length === 0 ? (
+          <div style={{fontSize:12, color:"#94A3B8"}}>ยังไม่มีประวัติ</div>
+        ) : (
+          <div style={{display:"flex", flexDirection:"column", gap:8}}>
+            {logs.map((log) => (
+              <div key={log.logId} className="history-row">
+                {editing === log.logId ? (
+                  <div style={{display:"flex", flexDirection:"column", gap:6}}>
+                    <div style={{fontSize:11.5, fontWeight:700}}>{log.buildingName} · {log.zoneName} · เตียง {log.bedLabel}</div>
+                    <input value={form.patient} onChange={(e)=>setForm({...form, patient:e.target.value})} placeholder="ชื่อเล่นผู้ป่วย" className="patient-input" />
+                    <select value={form.stayType} onChange={(e)=>setForm({...form, stayType:e.target.value})} className="staytype-select">
+                      {STAY_TYPES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    </select>
+                    <label style={{fontSize:10.5, color:"#64748B"}}>เวลาเข้าพัก
+                      <input type="datetime-local" value={form.checkInAt} onChange={(e)=>setForm({...form, checkInAt:e.target.value})} />
+                    </label>
+                    <label style={{fontSize:10.5, color:"#64748B"}}>เวลาออก (เว้นว่าง = ยังไม่เช็คเอาท์)
+                      <input type="datetime-local" value={form.checkOutAt} onChange={(e)=>setForm({...form, checkOutAt:e.target.value})} />
+                    </label>
+                    <div className="row">
+                      <button className="btn-outline" onClick={()=>setEditing(null)}>ยกเลิก</button>
+                      <button className="btn-emerald" onClick={()=>saveEdit(log.logId, !!log.checkOutAt)} disabled={savingId===log.logId}>
+                        {savingId===log.logId ? "กำลังบันทึก..." : "บันทึก"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:8}}>
+                    <div>
+                      <div style={{fontSize:12, fontWeight:700}}>{log.buildingName} · {log.zoneName} · เตียง {log.bedLabel}</div>
+                      <div style={{fontSize:11, color:"#64748B", display:"flex", alignItems:"center", gap:6, marginTop:2}}>
+                        <span>{log.patient || "(ไม่ระบุชื่อ)"}</span>
+                        <span className={`stay-chip ${log.stayType}`}>{log.stayType==="daytrip" ? "เช้าเย็นกลับ" : "ค้างคืน"}</span>
+                      </div>
+                      <div style={{fontSize:10, color:"#94A3B8", marginTop:2}}>
+                        {new Date(log.checkInAt).toLocaleString("th-TH")} → {log.checkOutAt ? new Date(log.checkOutAt).toLocaleString("th-TH") : "ยังไม่เช็คเอาท์"}
+                      </div>
+                    </div>
+                    <button className="edit-btn" onClick={()=>startEdit(log)}><Icon.Pencil size={14} /></button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -725,6 +896,7 @@ function App() {
     });
   }
   function toggleBed(buildingId, zoneId, bedId) {
+    if (connError) return; // ระงับการแก้ไขระหว่างเชื่อมต่อ Google Sheet ไม่ได้ กันข้อมูลหายแบบไม่รู้ตัว
     const b = buildings.find((x) => x.id === buildingId);
     const z = b && b.zones.find((x) => x.id === zoneId);
     const bed = z && z.beds.find((x) => x.id === bedId);
@@ -740,6 +912,7 @@ function App() {
   function confirmCheckIn(stayType) {
     if (!pendingCheckIn) return;
     const { buildingId, zoneId, bedId } = pendingCheckIn;
+    try { localStorage.setItem("lastStayType", stayType); } catch (e) {}
     doSetBedState(buildingId, zoneId, bedId, { available: false, stayType });
     setPendingCheckIn(null);
   }
@@ -878,13 +1051,18 @@ function App() {
         </div>
       </div>
 
-      {connError && <div className="banner banner-warn">เชื่อมต่อ Google Sheet ไม่ได้ชั่วคราว — ตรวจสอบการตั้งค่า Apps Script deployment</div>}
+      {connError && <div className="banner banner-warn"><Icon.Alert size={14} /> เชื่อมต่อ Google Sheet ไม่ได้ชั่วคราว — การแก้ไขถูกระงับชั่วคราวจนกว่าจะเชื่อมต่อได้ใหม่ (ตรวจสอบการตั้งค่า Apps Script deployment)</div>}
 
       <div className="strip">
         <button onClick={()=>setActiveId("__dashboard__")} className={`branch-pill dash-pill ${activeId==="__dashboard__"?"active":""}`}>
           <div className="branch-sub"><Icon.Chart size={11} />ภาพรวม</div>
           <div className="branch-name disp">แดชบอร์ด</div>
           <div className="branch-count" style={{color: activeId==="__dashboard__" ? "inherit" : "#059669"}}>{buildings ? overallCounts(buildings).available : 0} ว่างทั้งหมด</div>
+        </button>
+        <button onClick={()=>setActiveId("__history__")} className={`branch-pill dash-pill ${activeId==="__history__"?"active":""}`}>
+          <div className="branch-sub"><Icon.History size={11} />ย้อนหลัง</div>
+          <div className="branch-name disp">ประวัติ</div>
+          <div className="branch-count" style={{color: activeId==="__history__" ? "inherit" : "#059669"}}>แก้ไขได้</div>
         </button>
         {(buildings || []).map((b) => {
           const t = buildingCounts(b);
@@ -905,6 +1083,8 @@ function App() {
           <div className="loading"><Icon.Refresh size={20} className="spin" /><span>กำลังโหลดผังเตียง...</span></div>
         ) : activeId === "__dashboard__" ? (
           <Dashboard buildings={buildings} onSelectBranch={setActiveId} />
+        ) : activeId === "__history__" ? (
+          <HistoryView />
         ) : (
           <>
             {active && (
@@ -916,7 +1096,7 @@ function App() {
             {!active ? (
               <div className="loading"><Icon.Refresh size={20} className="spin" /><span>กำลังโหลดผังเตียง...</span></div>
             ) : (
-              <div className="zone-grid">
+              <div className={`zone-grid ${connError ? "locked" : ""}`}>
                 {active.zones.map((zone) => (
                   <ZoneCard key={zone.id} zone={zone}
                     onToggleBed={(bedId)=>toggleBed(active.id, zone.id, bedId)}
@@ -990,8 +1170,9 @@ function App() {
               <div className="modal-title">เตียง {pendingCheckIn.bedLabel} — ประเภทการเข้าพัก?</div>
               <p className="modal-text">เลือกก่อนเปิดเตียงเป็นไม่ว่างทุกครั้ง เพื่อใช้สรุปยอดวางบิลและ Occupancy Rate ให้ถูกต้อง</p>
               <div className="row" style={{marginTop:4}}>
-                <button className="btn-outline" onClick={()=>confirmCheckIn("daytrip")}>เช้าเย็นกลับ</button>
-                <button className="btn-emerald" onClick={()=>confirmCheckIn("overnight")}>ค้างคืน</button>
+                {STAY_TYPES.slice().sort((a,b)=> (a.id===getLastStayType()?-1:0) - (b.id===getLastStayType()?-1:0)).map((s) => (
+                  <button key={s.id} className={s.id===getLastStayType() ? "btn-emerald staytype-primary" : "btn-outline"} onClick={()=>confirmCheckIn(s.id)}>{s.label}</button>
+                ))}
               </div>
             </div>
           </div>
