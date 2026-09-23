@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700;800&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap');
   * { box-sizing: border-box; }
@@ -195,6 +196,17 @@
   .drawer-note { font-size:11px; color:#78716c; }
   .close-btn { background:none; border:none; color:#94A3B8; cursor:pointer; }
 
+  .add-zone-card { border-radius:28px; padding:18px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    border:2px dashed rgba(148,163,184,.45); background:transparent; color:#78829C; cursor:pointer; min-height:120px; font-size:12px; font-weight:600; }
+  .add-zone-card:active { background: rgba(148,163,184,.08); }
+  .month-input { border:none; border-radius:10px; padding:6px 10px; font-size:12px; background:#F4F6FA; box-shadow: inset 2px 2px 4px rgba(148,163,184,.25); }
+  .staytype-select { width:100%; font-size:11.5px; text-align:center; background: linear-gradient(150deg,#ffffff,#F3F5F9); border:none;
+    border-radius:12px; padding:8px; min-height:34px; color:#475569; box-shadow: inset 2px 2px 5px rgba(148,163,184,.25); }
+  .stay-chip { font-size:9.5px; font-weight:700; padding:3px 8px; border-radius:999px; }
+  .stay-chip.overnight { background: linear-gradient(150deg,#DCEAFE,#B9D6FC); color:#1D4E8F; }
+  .stay-chip.daytrip { background: linear-gradient(150deg,#FDE9CE,#FBCE8F); color:#8A4E0B; }
+  .num-input { width:64px; }
+
   .appfoot { padding:6px 16px; text-align:center; font-size:10px; color:#64748B; }
   .spin { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -227,12 +239,16 @@ const Icon = {
 function genBeds(total, availableCount, prefix) {
   return Array.from({ length: total }, (_, i) => ({
     id: `${prefix}-${i + 1}`, label: `${prefix}${i + 1}`,
-    available: i < availableCount, patient: "", caseTags: [],
+    available: i < availableCount, patient: "", stayType: "", caseTags: [],
   }));
 }
 const CASE_TAGS = [
   { id: "ng", label: "on NG" }, { id: "tt", label: "on TT" },
   { id: "foley", label: "on Foley" }, { id: "oral", label: "ทานอาหารทางปาก" },
+];
+const STAY_TYPES = [
+  { id: "overnight", label: "ค้างคืน" },
+  { id: "daytrip", label: "เช้าเย็นกลับ" },
 ];
 
 function seedData() {
@@ -302,14 +318,18 @@ function Toggle({ checked, onClick }) {
   return <button onClick={onClick} className={`toggle3d ${checked?"on":"off"}`} aria-label="สลับสถานะเตียง"><span className="thumb" /></button>;
 }
 
-function BedTile({ bed, onToggle, onNameChange, onNameBlur, onToggleTag, expanded, onToggleExpand }) {
+function BedTile({ bed, onToggle, onNameChange, onNameBlur, onToggleTag, onStayTypeChange, expanded, onToggleExpand }) {
   const tags = bed.caseTags || [];
   const showDetails = !bed.available && expanded;
+  const stayLabel = bed.stayType === "daytrip" ? "เช้าเย็นกลับ" : bed.stayType === "overnight" ? "ค้างคืน" : null;
   return (
     <div className={`bed-tile ${bed.available?"on":"off"}`}>
       <div className="bed-label-row"><Icon.Bed size={13} /><span className="bed-label">{bed.label}</span></div>
       <Toggle checked={bed.available} onClick={onToggle} />
       <div className={`bed-status ${bed.available?"on":"off"}`}>{bed.available?"ว่าง":"ไม่ว่าง"}</div>
+      {!bed.available && stayLabel && !showDetails && (
+        <span className={`stay-chip ${bed.stayType}`}>{stayLabel}</span>
+      )}
 
       {!bed.available && !showDetails && (
         <button className="details-toggle" onClick={onToggleExpand}>
@@ -320,6 +340,9 @@ function BedTile({ bed, onToggle, onNameChange, onNameBlur, onToggleTag, expande
 
       {showDetails && (
         <div className="bed-details">
+          <select value={bed.stayType || "overnight"} onChange={(e)=>onStayTypeChange(e.target.value)} className="staytype-select">
+            {STAY_TYPES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
           <div className="tag-row">
             {CASE_TAGS.map((tag) => {
               const active = tags.includes(tag.id);
@@ -335,7 +358,7 @@ function BedTile({ bed, onToggle, onNameChange, onNameBlur, onToggleTag, expande
   );
 }
 
-function ZoneCard({ zone, onToggleBed, onNameChange, onNameBlur, onToggleTag, onEdit, expandedBeds, onToggleExpand }) {
+function ZoneCard({ zone, onToggleBed, onNameChange, onNameBlur, onToggleTag, onStayTypeChange, onEdit, expandedBeds, onToggleExpand }) {
   const { total, available } = zoneCounts(zone);
   const meta = TAG_META[zone.tag] || TAG_META.common;
   return (
@@ -353,9 +376,47 @@ function ZoneCard({ zone, onToggleBed, onNameChange, onNameBlur, onToggleTag, on
           <BedTile key={bed.id} bed={bed} onToggle={()=>onToggleBed(bed.id)}
             onNameChange={(v)=>onNameChange(bed.id,v)} onNameBlur={onNameBlur}
             onToggleTag={(tagId)=>onToggleTag(bed.id,tagId)}
+            onStayTypeChange={(v)=>onStayTypeChange(bed.id,v)}
             expanded={expandedBeds.has(bed.id)} onToggleExpand={()=>onToggleExpand(bed.id)} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function AddZoneDrawer({ buildingId, onClose, onCreate }) {
+  const [name, setName] = useState("");
+  const [tag, setTag] = useState("common");
+  const [bedCount, setBedCount] = useState(4);
+  const [prefix, setPrefix] = useState("A");
+  return (
+    <div className="drawer">
+      <div className="drawer-head">
+        <span className="drawer-eyebrow">เพิ่มโซนใหม่</span>
+        <button className="close-btn" onClick={onClose}><Icon.X size={18} /></button>
+      </div>
+      <label>ชื่อโซน/ห้อง
+        <input value={name} onChange={(e)=>setName(e.target.value)} placeholder="เช่น โซนรวมชั้น 2" />
+      </label>
+      <label>ประเภท
+        <select value={tag} onChange={(e)=>setTag(e.target.value)}>
+          <option value="common">โซนรวม</option>
+          <option value="vip">VIP</option>
+          <option value="daycare">Day-care</option>
+        </select>
+      </label>
+      <div className="row" style={{alignItems:"flex-end"}}>
+        <label style={{flex:1}}>จำนวนเตียงเริ่มต้น
+          <input type="number" min="1" value={bedCount} onChange={(e)=>setBedCount(Number(e.target.value)||1)} />
+        </label>
+        <label style={{flex:1}}>อักษรนำหน้าเตียง
+          <input value={prefix} onChange={(e)=>setPrefix(e.target.value.toUpperCase())} maxLength={3} />
+        </label>
+      </div>
+      <p className="drawer-note">เตียงจะถูกตั้งชื่อ {prefix || "A"}1, {prefix || "A"}2, ... ตามจำนวนที่ระบุ และเริ่มต้นเป็น "ว่าง" ทั้งหมด</p>
+      <button className="btn-emerald" onClick={()=>{ if (!name.trim()) return; onCreate({ name: name.trim(), tag, bedCount, prefix: prefix || "A" }); }}>
+        <Icon.Plus size={14} /> สร้างโซนนี้
+      </button>
     </div>
   );
 }
@@ -370,11 +431,124 @@ function tagBreakdown(buildings) {
   return acc;
 }
 
+function daysInMonthStr(month) {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+// น้ำหนักวันเข้าพัก: ค้างคืน = 1 วัน/คืน, เช้าเย็นกลับ = 0.5 วัน (ตามที่ตกลงไว้)
+function computeMonthlySummary(logs, buildings, month) {
+  const dim = daysInMonthStr(month);
+  const [y, m] = month.split("-").map(Number);
+  const monthStart = new Date(y, m - 1, 1);
+  const monthEnd = new Date(y, m, 1); // exclusive
+
+  const bedDaysByBuilding = {};
+  const totalBedsByBuilding = {};
+  buildings.forEach((b) => { totalBedsByBuilding[b.id] = buildingCounts(b).total; bedDaysByBuilding[b.id] = 0; });
+
+  (logs || []).forEach((log) => {
+    const inD = new Date(log.checkInAt);
+    if (log.stayType === "daytrip") {
+      const d = new Date(inD.getFullYear(), inD.getMonth(), inD.getDate());
+      if (d >= monthStart && d < monthEnd) bedDaysByBuilding[log.buildingId] = (bedDaysByBuilding[log.buildingId] || 0) + 0.5;
+    } else {
+      const outD = log.checkOutAt ? new Date(log.checkOutAt) : new Date();
+      let cur = new Date(inD.getFullYear(), inD.getMonth(), inD.getDate());
+      const endDate = new Date(outD.getFullYear(), outD.getMonth(), outD.getDate());
+      const cutoff = log.checkOutAt ? endDate : new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1);
+      while (cur < cutoff) {
+        if (cur >= monthStart && cur < monthEnd) bedDaysByBuilding[log.buildingId] = (bedDaysByBuilding[log.buildingId] || 0) + 1;
+        cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
+      }
+    }
+  });
+
+  const byBuilding = buildings.map((b) => {
+    const totalBeds = totalBedsByBuilding[b.id] || 0;
+    const possible = totalBeds * dim;
+    const occupied = bedDaysByBuilding[b.id] || 0;
+    const rate = possible ? Math.round((occupied / possible) * 1000) / 10 : 0;
+    return { buildingId: b.id, buildingName: b.name, rate, occupied, possible };
+  });
+  const totalPossible = byBuilding.reduce((a, x) => a + x.possible, 0);
+  const totalOccupied = byBuilding.reduce((a, x) => a + x.occupied, 0);
+  const overallRate = totalPossible ? Math.round((totalOccupied / totalPossible) * 1000) / 10 : 0;
+  return { byBuilding, overallRate };
+}
+
+function exportMonthlyExcel(logs, month) {
+  const stayRows = (logs || []).map((l) => ({
+    "อาคาร": l.buildingName, "โซน": l.zoneName, "เตียง": l.bedLabel,
+    "ชื่อคนไข้": l.patient || "", "ประเภท": l.stayType === "daytrip" ? "เช้าเย็นกลับ" : "ค้างคืน",
+    "วันที่เข้า": l.checkInAt ? new Date(l.checkInAt).toLocaleString("th-TH") : "",
+    "วันที่ออก": l.checkOutAt ? new Date(l.checkOutAt).toLocaleString("th-TH") : "ยังอยู่",
+    "แท็กเคส": (l.caseTags || []).join(", "),
+  }));
+
+  const [y, m] = month.split("-").map(Number);
+  const monthStart = new Date(y, m - 1, 1);
+  const monthEnd = new Date(y, m, 1);
+  const dailyRows = [];
+  (logs || []).forEach((l) => {
+    const inD = new Date(l.checkInAt);
+    if (l.stayType === "daytrip") {
+      const d = new Date(inD.getFullYear(), inD.getMonth(), inD.getDate());
+      if (d >= monthStart && d < monthEnd) {
+        dailyRows.push({ "วันที่": d.toLocaleDateString("th-TH"), "อาคาร": l.buildingName, "โซน": l.zoneName, "เตียง": l.bedLabel, "ชื่อคนไข้": l.patient || "", "ประเภท": "เช้าเย็นกลับ" });
+      }
+    } else {
+      const outD = l.checkOutAt ? new Date(l.checkOutAt) : new Date();
+      let cur = new Date(inD.getFullYear(), inD.getMonth(), inD.getDate());
+      const endDate = new Date(outD.getFullYear(), outD.getMonth(), outD.getDate());
+      const cutoff = l.checkOutAt ? endDate : new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1);
+      while (cur < cutoff) {
+        if (cur >= monthStart && cur < monthEnd) {
+          dailyRows.push({ "วันที่": cur.toLocaleDateString("th-TH"), "อาคาร": l.buildingName, "โซน": l.zoneName, "เตียง": l.bedLabel, "ชื่อคนไข้": l.patient || "", "ประเภท": "ค้างคืน" });
+        }
+        cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
+      }
+    }
+  });
+  dailyRows.sort((a, b) => (a["วันที่"] > b["วันที่"] ? 1 : a["วันที่"] < b["วันที่"] ? -1 : 0));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stayRows), "สรุปการเข้าพัก");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), "สรุปรายวัน");
+  XLSX.writeFile(wb, `สรุปเตียง-${month}.xlsx`);
+}
+
 function Dashboard({ buildings, onSelectBranch }) {
   const overall = overallCounts(buildings);
   const occupiedPct = overall.total ? Math.round(((overall.total - overall.available) / overall.total) * 100) : 0;
   const breakdown = tagBreakdown(buildings);
   const maxTotal = Math.max(1, ...buildings.map((b) => buildingCounts(b).total));
+
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [logs, setLogs] = useState(null);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logError, setLogError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLogs() {
+      setLogLoading(true); setLogError(false);
+      try {
+        const [y, m] = month.split("-").map(Number);
+        const from = `${month}-01`;
+        const to = new Date(y, m, 1).toISOString().slice(0, 10);
+        const res = await fetch(`${API_URL}?key=${encodeURIComponent(API_KEY)}&action=getLog&from=${from}&to=${to}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (data && data.ok !== false) setLogs(data.logs || []); else setLogError(true);
+      } catch (e) { if (!cancelled) setLogError(true); }
+      if (!cancelled) setLogLoading(false);
+    }
+    loadLogs();
+    return () => { cancelled = true; };
+  }, [month]);
+
+  const summary = logs ? computeMonthlySummary(logs, buildings, month) : null;
 
   return (
     <div className="dash-wrap">
@@ -427,6 +601,36 @@ function Dashboard({ buildings, onSelectBranch }) {
           );
         })}
       </div>
+
+      <div className="dash-chart-card">
+        <div className="dash-chart-title" style={{display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8}}>
+          <span>Occupancy Rate รายเดือน (สำหรับผู้บริหาร/บัญชี)</span>
+          <input type="month" value={month} onChange={(e)=>setMonth(e.target.value)} className="month-input" />
+        </div>
+        {logLoading ? (
+          <div style={{fontSize:12, color:"#94A3B8"}}>กำลังคำนวณ...</div>
+        ) : logError ? (
+          <div style={{fontSize:12, color:"#DC2626"}}>โหลดข้อมูลย้อนหลังไม่สำเร็จ — ตรวจสอบการเชื่อมต่อ</div>
+        ) : summary ? (
+          <>
+            <div className="dash-occ-bar"><div className="dash-occ-fill" style={{ width: `${summary.overallRate}%` }} /></div>
+            <div className="dash-occ-label">Occupancy Rate เดือนนี้ (รวมทุกสาขา): {summary.overallRate}%</div>
+            {summary.byBuilding.map((bs) => (
+              <div key={bs.buildingId} className="dash-bar-row" style={{cursor:"default"}}>
+                <span className="dash-bar-label">{bs.buildingName}</span>
+                <span className="dash-bar-track" style={{ width:"100%" }}>
+                  <span className="dash-bar-fill" style={{ width: `${bs.rate}%` }} />
+                </span>
+                <span className="dash-bar-count">{bs.rate}%</span>
+              </div>
+            ))}
+            <button className="btn-emerald" style={{marginTop:6}} onClick={()=>exportMonthlyExcel(logs, month)}>
+              <Icon.Chart size={14} /> ดาวน์โหลด Excel สำหรับวางบิล
+            </button>
+            <p className="drawer-note" style={{margin:0}}>เช้าเย็นกลับนับเป็น 0.5 วันในสูตร Occupancy Rate ส่วนไฟล์ Excel มี 2 ชีท: สรุปการเข้าพัก และสรุปรายวัน</p>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -440,6 +644,9 @@ function App() {
   const [connError, setConnError] = useState(false);
   const [expandedBeds, setExpandedBeds] = useState(() => new Set());
   const [confirmDelete, setConfirmDelete] = useState(null); // {buildingId, zoneId, bed}
+  const [pendingCheckIn, setPendingCheckIn] = useState(null); // {buildingId, zoneId, bedId, bedLabel}
+  const [addZoneFor, setAddZoneFor] = useState(null); // buildingId
+  const [confirmDeleteZone, setConfirmDeleteZone] = useState(null); // {buildingId, zoneId, zoneName, bedCount, hasOccupied}
   const buildingsRef = useRef(null);
   const writeTimer = useRef(null);
   const connected = true;
@@ -505,12 +712,26 @@ function App() {
     });
   }
   function toggleBed(buildingId, zoneId, bedId) {
-    let patch = null;
-    const next = mapBed(buildingId, zoneId, bedId, (bed) => {
-      const nowAvailable = !bed.available;
-      patch = { available: nowAvailable, patient: nowAvailable ? "" : bed.patient };
-      return { ...bed, ...patch };
-    });
+    const b = buildings.find((x) => x.id === buildingId);
+    const z = b && b.zones.find((x) => x.id === zoneId);
+    const bed = z && z.beds.find((x) => x.id === bedId);
+    if (!bed) return;
+    if (bed.available) {
+      // กำลังจะเปิดเตียงเป็น "ไม่ว่าง" — บังคับเลือกประเภทการเข้าพักก่อนทุกครั้ง
+      setPendingCheckIn({ buildingId, zoneId, bedId, bedLabel: bed.label });
+      return;
+    }
+    // กำลังจะปิดเป็น "ว่าง" (checkout) — ทำทันที ไม่ต้องเลือกอะไร
+    doSetBedState(buildingId, zoneId, bedId, { available: true, patient: "", stayType: "" });
+  }
+  function confirmCheckIn(stayType) {
+    if (!pendingCheckIn) return;
+    const { buildingId, zoneId, bedId } = pendingCheckIn;
+    doSetBedState(buildingId, zoneId, bedId, { available: false, stayType });
+    setPendingCheckIn(null);
+  }
+  function doSetBedState(buildingId, zoneId, bedId, patch) {
+    const next = mapBed(buildingId, zoneId, bedId, (bed) => ({ ...bed, ...patch }));
     setBuildings(next);
     setExpandedBeds((prev) => {
       const s = new Set(prev);
@@ -518,6 +739,10 @@ function App() {
       return s;
     });
     sendAction({ action: "updateBed", zoneId, bedId, patch });
+  }
+  function changeStayType(buildingId, zoneId, bedId, value) {
+    setBuildings(mapBed(buildingId, zoneId, bedId, (bed) => ({ ...bed, stayType: value })));
+    sendAction({ action: "updateBed", zoneId, bedId, patch: { stayType: value } });
   }
   function toggleExpand(bedId) {
     setExpandedBeds((prev) => {
@@ -587,6 +812,36 @@ function App() {
     setBuildings(next);
     sendAction({ action: "renameZone", zoneId, patch });
   }
+  function createZone(buildingId, form) {
+    const building = buildings.find((b) => b.id === buildingId);
+    if (!building) return;
+    const zoneId = `${buildingId}-z${Date.now()}`;
+    const beds = Array.from({ length: Math.max(1, form.bedCount || 1) }, (_, i) => ({
+      id: `${zoneId}-${i + 1}`, label: `${form.prefix}${i + 1}`, available: true, patient: "", stayType: "", caseTags: [],
+    }));
+    const zone = { id: zoneId, name: form.name, tag: form.tag, beds };
+    const next = buildings.map((b) => b.id!==buildingId ? b : { ...b, updatedAt: new Date().toISOString(), zones: [...b.zones, zone] });
+    setBuildings(next);
+    sendAction({ action: "addZone", buildingId, buildingName: building.name, buildingSub: building.sub, zone });
+    setAddZoneFor(null);
+  }
+  function requestRemoveZone(buildingId, zoneId) {
+    const building = buildings.find((b) => b.id === buildingId);
+    const zone = building && building.zones.find((z) => z.id === zoneId);
+    if (!zone) return;
+    if (building.zones.length <= 1) { alert("ต้องมีอย่างน้อย 1 โซนต่ออาคาร ลบไม่ได้ครับ"); return; }
+    const hasOccupied = zone.beds.some((b) => !b.available);
+    setConfirmDeleteZone({ buildingId, zoneId, zoneName: zone.name, bedCount: zone.beds.length, hasOccupied });
+  }
+  function confirmRemoveZoneAction() {
+    if (!confirmDeleteZone) return;
+    const { buildingId, zoneId } = confirmDeleteZone;
+    const next = buildings.map((b) => b.id!==buildingId ? b : { ...b, updatedAt: new Date().toISOString(), zones: b.zones.filter((z)=>z.id!==zoneId) });
+    setBuildings(next);
+    sendAction({ action: "removeZone", zoneId });
+    setConfirmDeleteZone(null);
+    setEditZone(null);
+  }
 
   const active = buildings ? buildings.find((b)=>b.id===activeId) : null;
   const overall = buildings ? overallCounts(buildings) : { total:0, available:0 };
@@ -655,9 +910,14 @@ function App() {
                     onNameChange={(bedId,v)=>changeBedName(active.id, zone.id, bedId, v)}
                     onNameBlur={()=>flushWriteName(active.id, zone.id)}
                     onToggleTag={(bedId,tagId)=>toggleCaseTag(active.id, zone.id, bedId, tagId)}
+                    onStayTypeChange={(bedId,v)=>changeStayType(active.id, zone.id, bedId, v)}
                     onEdit={()=>setEditZone({buildingId:active.id, zoneId:zone.id})}
                     expandedBeds={expandedBeds} onToggleExpand={toggleExpand} />
                 ))}
+                <button className="add-zone-card" onClick={()=>setAddZoneFor(active.id)}>
+                  <Icon.Plus size={20} />
+                  <span>เพิ่มโซนใหม่</span>
+                </button>
               </div>
             )}
           </>
@@ -685,6 +945,42 @@ function App() {
               <button className="btn-emerald" onClick={()=>addBed(editZone.buildingId, editZone.zoneId)}><Icon.Plus size={14} /> เพิ่มเตียง</button>
             </div>
             <p className="drawer-note">เตียงใหม่จะเรียงหมายเลขต่อท้ายอัตโนมัติ ส่วนสถานะว่าง/ไม่ว่างของแต่ละเตียงสลับได้จากปุ่มสวิตช์บนการ์ดโดยตรง</p>
+            <button className="btn-danger" onClick={()=>requestRemoveZone(editZone.buildingId, editZone.zoneId)}><Icon.X size={14} /> ลบโซนนี้ทั้งหมด</button>
+          </div>
+        )}
+
+        {addZoneFor && (
+          <AddZoneDrawer buildingId={addZoneFor} onClose={()=>setAddZoneFor(null)} onCreate={(form)=>createZone(addZoneFor, form)} />
+        )}
+
+        {confirmDeleteZone && (
+          <div className="modal-overlay" onClick={()=>setConfirmDeleteZone(null)}>
+            <div className="modal-box" onClick={(e)=>e.stopPropagation()}>
+              <Icon.Alert size={26} color={confirmDeleteZone.hasOccupied ? "#DC2626" : "#D97706"} />
+              <div className="modal-title">ลบโซน "{confirmDeleteZone.zoneName}"?</div>
+              <p className="modal-text">
+                โซนนี้มี {confirmDeleteZone.bedCount} เตียง{confirmDeleteZone.hasOccupied ? " และบางเตียงยังไม่ว่าง (มีคนไข้อยู่)" : ""} —
+                ลบแล้วเตียงและข้อมูลทั้งหมดในโซนนี้จะหายไปถาวร ย้อนกลับไม่ได้
+              </p>
+              <div className="row" style={{marginTop:4}}>
+                <button className="btn-outline" onClick={()=>setConfirmDeleteZone(null)}>ยกเลิก</button>
+                <button className="btn-danger" onClick={confirmRemoveZoneAction}>ยืนยันลบโซน</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pendingCheckIn && (
+          <div className="modal-overlay" onClick={()=>setPendingCheckIn(null)}>
+            <div className="modal-box" onClick={(e)=>e.stopPropagation()}>
+              <Icon.Bed size={24} color="#3CB878" />
+              <div className="modal-title">เตียง {pendingCheckIn.bedLabel} — ประเภทการเข้าพัก?</div>
+              <p className="modal-text">เลือกก่อนเปิดเตียงเป็นไม่ว่างทุกครั้ง เพื่อใช้สรุปยอดวางบิลและ Occupancy Rate ให้ถูกต้อง</p>
+              <div className="row" style={{marginTop:4}}>
+                <button className="btn-outline" onClick={()=>confirmCheckIn("daytrip")}>เช้าเย็นกลับ</button>
+                <button className="btn-emerald" onClick={()=>confirmCheckIn("overnight")}>ค้างคืน</button>
+              </div>
+            </div>
           </div>
         )}
 
