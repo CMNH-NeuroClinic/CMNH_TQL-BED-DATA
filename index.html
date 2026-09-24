@@ -160,6 +160,10 @@
 
   .patient-input { width:100%; font-size:12px; text-align:center; background: linear-gradient(150deg,#ffffff,#F3F5F9); border:none;
     border-radius:12px; padding:9px; min-height:38px; color:#475569; box-shadow: inset 2px 2px 5px rgba(148,163,184,.25); }
+  .price-row { display:flex; align-items:center; justify-content:center; gap:6px; }
+  .price-label { font-size:10.5px; color:#64748B; white-space:nowrap; }
+  .price-input { width:84px; font-size:12px; text-align:center; background: linear-gradient(150deg,#ffffff,#F3F5F9); border:none;
+    border-radius:12px; padding:9px 4px; min-height:38px; color:#475569; box-shadow: inset 2px 2px 5px rgba(148,163,184,.25); }
 
   .details-toggle { display:flex; align-items:center; justify-content:center; gap:4px; width:100%; border:none; cursor:pointer;
     background:transparent; color:#94A3B8; font-size:10.5px; padding:6px 4px; min-height:30px; border-radius:10px; }
@@ -218,6 +222,20 @@
     box-shadow: 4px 4px 10px rgba(148,163,184,.25), -4px -4px 10px rgba(255,255,255,.9); }
   .collapse-head { display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
 
+  .bed-tile.dirty { outline:2px dashed #F59E0B; outline-offset:2px; }
+  .dirty-dot { display:inline-block; width:7px; height:7px; border-radius:999px; background:#F59E0B;
+    box-shadow:0 0 0 3px rgba(245,158,11,.25); vertical-align:middle; margin-left:4px; }
+  .commit-bar-label { display:inline-flex; align-items:center; font-size:12.5px; font-weight:700; color:#92400E; }
+  .commit-bar { position:fixed; left:0; right:0; bottom:0; z-index:40; display:flex; align-items:center; justify-content:space-between;
+    gap:10px; flex-wrap:wrap; padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));
+    background: linear-gradient(150deg,#FFFBEB,#FEF3C7); border-top:2px solid #FCD34D;
+    box-shadow: 0 -6px 20px rgba(148,163,184,.35); }
+  .commit-bar .commit-btn { border:none; border-radius:16px; padding:11px 20px; font-weight:700; font-size:13px; cursor:pointer;
+    background: linear-gradient(150deg,#7FE0AC,#3CB878); color:#0F3D28; box-shadow: 4px 4px 10px rgba(30,140,90,.4); }
+  .commit-bar .commit-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .commit-bar .discard-btn { border:none; border-radius:16px; padding:11px 16px; font-weight:600; font-size:13px; cursor:pointer;
+    background: linear-gradient(150deg,#ffffff,#EFF1F7); color:#5B6B8C; box-shadow:4px 4px 10px rgba(148,163,184,.3); }
+
   .appfoot { padding:6px 16px; text-align:center; font-size:10px; color:#64748B; }
   .spin { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -252,9 +270,10 @@ const Icon = {
 function genBeds(total, availableCount, prefix) {
   return Array.from({ length: total }, (_, i) => ({
     id: `${prefix}-${i + 1}`, label: `${prefix}${i + 1}`,
-    available: i < availableCount, patient: "", stayType: "", caseTags: [],
+    available: i < availableCount, patient: "", stayType: "", caseTags: [], packagePrice: 0,
   }));
 }
+function formatTHB(n) { return (Number(n) || 0).toLocaleString("th-TH") + " บาท"; }
 const CASE_TAGS = [
   { id: "ng", label: "on NG" }, { id: "tt", label: "on TT" },
   { id: "foley", label: "on Foley" }, { id: "oral", label: "ทานอาหารทางปาก" },
@@ -338,13 +357,13 @@ function Toggle({ checked, onClick, disabled }) {
   return <button onClick={disabled?undefined:onClick} disabled={disabled} className={`toggle3d ${checked?"on":"off"}`} aria-label="สลับสถานะเตียง" style={disabled?{opacity:.5,cursor:"not-allowed"}:undefined}><span className="thumb" /></button>;
 }
 
-function BedTile({ bed, onToggle, onNameChange, onNameBlur, onToggleTag, onStayTypeChange, expanded, onToggleExpand }) {
+function BedTile({ bed, onToggle, onNameChange, onNameBlur, onToggleTag, onStayTypeChange, onPriceChange, expanded, onToggleExpand, dirty }) {
   const tags = bed.caseTags || [];
   const showDetails = !bed.available && expanded;
   const stayLabel = bed.stayType === "daytrip" ? "เช้าเย็นกลับ" : bed.stayType === "overnight" ? "ค้างคืน" : null;
   return (
-    <div className={`bed-tile ${bed.available?"on":"off"}`}>
-      <div className="bed-label-row"><Icon.Bed size={13} /><span className="bed-label">{bed.label}</span></div>
+    <div className={`bed-tile ${bed.available?"on":"off"} ${dirty?"dirty":""}`}>
+      <div className="bed-label-row"><Icon.Bed size={13} /><span className="bed-label">{bed.label}</span>{dirty && <span className="dirty-dot" title="ยังไม่ได้บันทึก" />}</div>
       <Toggle checked={bed.available} onClick={onToggle} />
       <div className={`bed-status ${bed.available?"on":"off"}`}>{bed.available?"ว่าง":"ไม่ว่าง"}</div>
       {!bed.available && stayLabel && !showDetails && (
@@ -371,6 +390,12 @@ function BedTile({ bed, onToggle, onNameChange, onNameBlur, onToggleTag, onStayT
           </div>
           <input value={bed.patient} onChange={(e)=>onNameChange(e.target.value)} onBlur={onNameBlur}
             placeholder="ชื่อเล่นผู้ป่วย" className="patient-input" />
+          <div className="price-row">
+            <span className="price-label">แพ็กเกจ/เดือน</span>
+            <input type="number" min="0" step="500" value={bed.packagePrice || ""} onChange={(e)=>onPriceChange(Number(e.target.value)||0)}
+              placeholder="0" className="price-input" />
+            <span className="price-label">บาท</span>
+          </div>
           <button className="details-toggle" onClick={onToggleExpand}><span>ย่อ</span><Icon.Chevron size={12} open={true} /></button>
         </div>
       )}
@@ -378,7 +403,7 @@ function BedTile({ bed, onToggle, onNameChange, onNameBlur, onToggleTag, onStayT
   );
 }
 
-function ZoneCard({ zone, onToggleBed, onNameChange, onNameBlur, onToggleTag, onStayTypeChange, onEdit, expandedBeds, onToggleExpand }) {
+function ZoneCard({ zone, onToggleBed, onNameChange, onNameBlur, onToggleTag, onStayTypeChange, onPriceChange, onEdit, expandedBeds, onToggleExpand, dirtyKeys }) {
   const { total, available } = zoneCounts(zone);
   const meta = TAG_META[zone.tag] || TAG_META.common;
   return (
@@ -397,6 +422,8 @@ function ZoneCard({ zone, onToggleBed, onNameChange, onNameBlur, onToggleTag, on
             onNameChange={(v)=>onNameChange(bed.id,v)} onNameBlur={onNameBlur}
             onToggleTag={(tagId)=>onToggleTag(bed.id,tagId)}
             onStayTypeChange={(v)=>onStayTypeChange(bed.id,v)}
+            onPriceChange={(v)=>onPriceChange(bed.id,v)}
+            dirty={dirtyKeys.has(`${zone.id}::${bed.id}`)}
             expanded={expandedBeds.has(bed.id)} onToggleExpand={()=>onToggleExpand(bed.id)} />
         ))}
       </div>
@@ -465,9 +492,12 @@ function computeMonthlySummary(logs, buildings, month) {
 
   const bedDaysByBuilding = {};
   const totalBedsByBuilding = {};
-  buildings.forEach((b) => { totalBedsByBuilding[b.id] = buildingCounts(b).total; bedDaysByBuilding[b.id] = 0; });
+  const revenueByBuilding = {};
+  buildings.forEach((b) => { totalBedsByBuilding[b.id] = buildingCounts(b).total; bedDaysByBuilding[b.id] = 0; revenueByBuilding[b.id] = 0; });
 
   (logs || []).forEach((log) => {
+    // ประมาณการรายได้: นับราคาแพ็กเกจเต็มจำนวนต่อ 1 เคสที่มีช่วงเข้าพักคาบเกี่ยวเดือนนี้ (ไม่ได้เฉลี่ยตามจำนวนวันที่อยู่จริง)
+    revenueByBuilding[log.buildingId] = (revenueByBuilding[log.buildingId] || 0) + (Number(log.packagePrice) || 0);
     const inD = new Date(log.checkInAt);
     if (log.stayType === "daytrip") {
       const d = new Date(inD.getFullYear(), inD.getMonth(), inD.getDate());
@@ -489,22 +519,31 @@ function computeMonthlySummary(logs, buildings, month) {
     const possible = totalBeds * dim;
     const occupied = bedDaysByBuilding[b.id] || 0;
     const rate = possible ? Math.round((occupied / possible) * 1000) / 10 : 0;
-    return { buildingId: b.id, buildingName: b.name, rate, occupied, possible };
+    return { buildingId: b.id, buildingName: b.name, rate, occupied, possible, revenue: revenueByBuilding[b.id] || 0 };
   });
   const totalPossible = byBuilding.reduce((a, x) => a + x.possible, 0);
   const totalOccupied = byBuilding.reduce((a, x) => a + x.occupied, 0);
   const overallRate = totalPossible ? Math.round((totalOccupied / totalPossible) * 1000) / 10 : 0;
-  return { byBuilding, overallRate };
+  const totalRevenue = byBuilding.reduce((a, x) => a + x.revenue, 0);
+  return { byBuilding, overallRate, totalRevenue };
 }
 
 function exportMonthlyExcel(logs, month) {
   const stayRows = (logs || []).map((l) => ({
     "อาคาร": l.buildingName, "โซน": l.zoneName, "เตียง": l.bedLabel,
     "ชื่อคนไข้": l.patient || "", "ประเภท": l.stayType === "daytrip" ? "เช้าเย็นกลับ" : "ค้างคืน",
+    "แพ็กเกจ/เดือน (บาท)": Number(l.packagePrice) || 0,
     "วันที่เข้า": l.checkInAt ? new Date(l.checkInAt).toLocaleString("th-TH") : "",
     "วันที่ออก": l.checkOutAt ? new Date(l.checkOutAt).toLocaleString("th-TH") : "ยังอยู่",
     "แท็กเคส": (l.caseTags || []).join(", "),
   }));
+
+  const revenueByBuilding = {};
+  (logs || []).forEach((l) => {
+    revenueByBuilding[l.buildingName] = (revenueByBuilding[l.buildingName] || 0) + (Number(l.packagePrice) || 0);
+  });
+  const revenueRows = Object.keys(revenueByBuilding).map((name) => ({ "อาคาร": name, "รายได้ประมาณการ (บาท)": revenueByBuilding[name] }));
+  revenueRows.push({ "อาคาร": "รวมทุกสาขา", "รายได้ประมาณการ (บาท)": Object.values(revenueByBuilding).reduce((a,x)=>a+x,0) });
 
   const [y, m] = month.split("-").map(Number);
   const monthStart = new Date(y, m - 1, 1);
@@ -535,6 +574,7 @@ function exportMonthlyExcel(logs, month) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stayRows), "สรุปการเข้าพัก");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), "สรุปรายวัน");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(revenueRows), "รายได้ตามสาขา");
   XLSX.writeFile(wb, `สรุปเตียง-${month}.xlsx`);
 }
 
@@ -685,10 +725,17 @@ function Dashboard({ buildings, onSelectBranch }) {
                 <span className="dash-bar-count">{bs.rate}%</span>
               </div>
             ))}
+            <div className="dash-occ-label" style={{marginTop:10}}>ประมาณการรายได้เดือนนี้ (รวมทุกสาขา): {formatTHB(summary.totalRevenue)}</div>
+            {summary.byBuilding.map((bs) => (
+              <div key={bs.buildingId + "-rev"} className="dash-bar-row" style={{cursor:"default"}}>
+                <span className="dash-bar-label">{bs.buildingName}</span>
+                <span className="dash-bar-count" style={{marginLeft:"auto"}}>{formatTHB(bs.revenue)}</span>
+              </div>
+            ))}
             <button className="btn-emerald" style={{marginTop:6}} onClick={()=>exportMonthlyExcel(logs, month)}>
               <Icon.Chart size={14} /> ดาวน์โหลด Excel สำหรับวางบิล
             </button>
-            <p className="drawer-note" style={{margin:0}}>เช้าเย็นกลับนับเป็น 0.5 วันในสูตร Occupancy Rate ส่วนไฟล์ Excel มี 2 ชีท: สรุปการเข้าพัก และสรุปรายวัน</p>
+            <p className="drawer-note" style={{margin:0}}>เช้าเย็นกลับนับเป็น 0.5 วันในสูตร Occupancy Rate — รายได้นับราคาแพ็กเกจเต็มต่อเคสที่เข้าพักคาบเกี่ยวเดือนนี้ (ไม่เฉลี่ยตามวัน) ไฟล์ Excel มี 2 ชีท: สรุปการเข้าพัก และสรุปรายวัน</p>
               </>
             ) : null}
           </>
@@ -720,6 +767,7 @@ function HistoryView() {
     setForm({
       patient: log.patient || "",
       stayType: log.stayType || "overnight",
+      packagePrice: log.packagePrice || 0,
       checkInAt: toLocalInputValue(log.checkInAt),
       checkOutAt: log.checkOutAt ? toLocalInputValue(log.checkOutAt) : "",
     });
@@ -730,6 +778,7 @@ function HistoryView() {
       const patch = {
         patient: form.patient,
         stayType: form.stayType,
+        packagePrice: Number(form.packagePrice) || 0,
         checkInAt: form.checkInAt ? new Date(form.checkInAt).toISOString() : undefined,
       };
       // เว้นว่างช่องเวลาออก = ยังไม่เช็คเอาท์ (ล้างค่า) — ถ้ามีการกรอกเวลาก็ส่งไปตามนั้น
@@ -769,6 +818,11 @@ function HistoryView() {
                     <select value={form.stayType} onChange={(e)=>setForm({...form, stayType:e.target.value})} className="staytype-select">
                       {STAY_TYPES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </select>
+                    <div className="price-row">
+                      <span className="price-label">แพ็กเกจ/เดือน</span>
+                      <input type="number" min="0" step="500" value={form.packagePrice} onChange={(e)=>setForm({...form, packagePrice:Number(e.target.value)||0})} className="price-input" />
+                      <span className="price-label">บาท</span>
+                    </div>
                     <label style={{fontSize:10.5, color:"#64748B"}}>เวลาเข้าพัก
                       <input type="datetime-local" value={form.checkInAt} onChange={(e)=>setForm({...form, checkInAt:e.target.value})} />
                     </label>
@@ -789,6 +843,7 @@ function HistoryView() {
                       <div style={{fontSize:11, color:"#64748B", display:"flex", alignItems:"center", gap:6, marginTop:2}}>
                         <span>{log.patient || "(ไม่ระบุชื่อ)"}</span>
                         <span className={`stay-chip ${log.stayType}`}>{log.stayType==="daytrip" ? "เช้าเย็นกลับ" : "ค้างคืน"}</span>
+                        {!!log.packagePrice && <span style={{fontSize:10.5, color:"#0F766E", fontWeight:700}}>{formatTHB(log.packagePrice)}/ด.</span>}
                       </div>
                       <div style={{fontSize:10, color:"#94A3B8", marginTop:2}}>
                         {new Date(log.checkInAt).toLocaleString("th-TH")} → {log.checkOutAt ? new Date(log.checkOutAt).toLocaleString("th-TH") : "ยังไม่เช็คเอาท์"}
@@ -820,10 +875,13 @@ function App() {
   const [confirmDeleteZone, setConfirmDeleteZone] = useState(null); // {buildingId, zoneId, zoneName, bedCount, hasOccupied}
   const buildingsRef = useRef(null);
   const skipPollUntil = useRef(0);
-  const writeTimer = useRef(null);
+  const pendingChangesRef = useRef({});
+  const [pendingChanges, setPendingChanges] = useState({}); // key: `${zoneId}::${bedId}` -> {buildingId, zoneId, bedId, patch}
+  const [committing, setCommitting] = useState(false);
   const connected = true;
 
   useEffect(() => { buildingsRef.current = buildings; }, [buildings]);
+  useEffect(() => { pendingChangesRef.current = pendingChanges; }, [pendingChanges]);
   useEffect(() => { const t = setInterval(()=>setBuildings((b)=>b?[...b]:b), 30000); return ()=>clearInterval(t); }, []);
 
   async function fetchData() {
@@ -848,8 +906,8 @@ function App() {
     if (!connected) { if (!buildingsRef.current) setBuildings(seedData()); return; }
     let cancelled = false;
     async function load(initial) {
-      // เว้นรอบโพลนี้ไปก่อน ถ้าเพิ่งมีการกดแก้ไขสดไม่นานมานี้ — กันข้อมูลที่ชีทยังเขียนไม่ทันมาทับของที่เพิ่งกด
-      if (!initial && Date.now() < skipPollUntil.current) return;
+      // เว้นรอบโพลนี้ไปก่อน ถ้าเพิ่งมีการบันทึกไม่นานมานี้ หรือยังมีรายการที่ยังไม่ได้กด "บันทึกรายการ" ค้างอยู่
+      if (!initial && (Date.now() < skipPollUntil.current || Object.keys(pendingChangesRef.current).length > 0)) return;
       try {
         const data = await fetchData();
         if (cancelled) return;
@@ -876,12 +934,36 @@ function App() {
   }, []);
 
   async function sendAction(payload) {
+    // ใช้เฉพาะการกระทำที่ต้องการผลทันที (เพิ่ม/ลบโซน, เปลี่ยนชื่อโซน ฯลฯ) — ไม่ใช่การแก้ไขเตียงทีละใบ
     if (!connected) return;
     skipPollUntil.current = Date.now() + 6000;
     setSaving(true);
     try { await postAction(payload); setLastSync(new Date()); setConnError(false); }
     catch (e) { console.error(e); setConnError(true); }
     setSaving(false);
+  }
+  function queueChange(buildingId, zoneId, bedId, patch) {
+    const key = `${zoneId}::${bedId}`;
+    setPendingChanges((prev) => ({
+      ...prev,
+      [key]: { buildingId, zoneId, bedId, patch: { ...(prev[key] && prev[key].patch), ...patch } },
+    }));
+  }
+  async function commitPendingChanges() {
+    const changes = Object.values(pendingChanges);
+    if (changes.length === 0 || connError) return;
+    setCommitting(true);
+    try {
+      await postAction({ action: "batchUpdate", updates: changes.map(({ zoneId, bedId, patch }) => ({ zoneId, bedId, patch })) });
+      setPendingChanges({});
+      skipPollUntil.current = Date.now() + 2000; // เผื่อเวลาให้ชีทเขียนเสร็จก่อนโพลรอบถัดไปมาทับ
+      setLastSync(new Date()); setConnError(false);
+    } catch (e) { console.error(e); setConnError(true); }
+    setCommitting(false);
+  }
+  function discardPendingChanges() {
+    setPendingChanges({});
+    manualRefresh();
   }
   async function manualRefresh() {
     if (!connected) return;
@@ -924,11 +1006,15 @@ function App() {
       if (patch.available) s.delete(bedId); else s.add(bedId); // auto-open details right after marking occupied
       return s;
     });
-    sendAction({ action: "updateBed", zoneId, bedId, patch });
+    queueChange(buildingId, zoneId, bedId, patch);
   }
   function changeStayType(buildingId, zoneId, bedId, value) {
     setBuildings(mapBed(buildingId, zoneId, bedId, (bed) => ({ ...bed, stayType: value })));
-    sendAction({ action: "updateBed", zoneId, bedId, patch: { stayType: value } });
+    queueChange(buildingId, zoneId, bedId, { stayType: value });
+  }
+  function changePackagePrice(buildingId, zoneId, bedId, value) {
+    setBuildings(mapBed(buildingId, zoneId, bedId, (bed) => ({ ...bed, packagePrice: value })));
+    queueChange(buildingId, zoneId, bedId, { packagePrice: value });
   }
   function toggleExpand(bedId) {
     setExpandedBeds((prev) => {
@@ -939,16 +1025,7 @@ function App() {
   }
   function changeBedName(buildingId, zoneId, bedId, value) {
     setBuildings(mapBed(buildingId, zoneId, bedId, (bed)=>({ ...bed, patient: value })));
-    if (!connected) return;
-    if (writeTimer.current) clearTimeout(writeTimer.current);
-    writeTimer.current = setTimeout(() => sendAction({ action: "updateBed", zoneId, bedId, patch: { patient: value } }), 700);
-  }
-  function flushWriteName(buildingId, zoneId, bedId) {
-    if (writeTimer.current) { clearTimeout(writeTimer.current); writeTimer.current = null; }
-    const b = (buildingsRef.current || []).find((bb) => bb.id === buildingId);
-    const z = b && b.zones.find((zz) => zz.id === zoneId);
-    const bed = z && z.beds.find((bb) => bb.id === bedId);
-    if (bed) sendAction({ action: "updateBed", zoneId, bedId, patch: { patient: bed.patient } });
+    queueChange(buildingId, zoneId, bedId, { patient: value });
   }
   function toggleCaseTag(buildingId, zoneId, bedId, tagId) {
     let newTags = null;
@@ -959,7 +1036,7 @@ function App() {
       return { ...bed, caseTags: newTags };
     });
     setBuildings(next);
-    sendAction({ action: "updateBed", zoneId, bedId, patch: { caseTags: newTags } });
+    queueChange(buildingId, zoneId, bedId, { caseTags: newTags });
   }
   function addBed(buildingId, zoneId) {
     const building = buildings.find((b) => b.id === buildingId);
@@ -967,7 +1044,7 @@ function App() {
     if (!zone) return;
     const n = zone.beds.length + 1;
     const prefix = zone.beds[0] ? zone.beds[0].label.replace(/\d+$/, "") : "A";
-    const bed = { id: `${zoneId}-${Date.now()}`, label: `${prefix}${n}`, available: true, patient: "", caseTags: [] };
+    const bed = { id: `${zoneId}-${Date.now()}`, label: `${prefix}${n}`, available: true, patient: "", stayType: "", caseTags: [], packagePrice: 0 };
     const next = buildings.map((b) => b.id!==buildingId ? b : {
       ...b, updatedAt: new Date().toISOString(),
       zones: b.zones.map((z) => z.id!==zoneId ? z : { ...z, beds: [...z.beds, bed] }),
@@ -1003,7 +1080,7 @@ function App() {
     if (!building) return;
     const zoneId = `${buildingId}-z${Date.now()}`;
     const beds = Array.from({ length: Math.max(1, form.bedCount || 1) }, (_, i) => ({
-      id: `${zoneId}-${i + 1}`, label: `${form.prefix}${i + 1}`, available: true, patient: "", stayType: "", caseTags: [],
+      id: `${zoneId}-${i + 1}`, label: `${form.prefix}${i + 1}`, available: true, patient: "", stayType: "", caseTags: [], packagePrice: 0,
     }));
     const zone = { id: zoneId, name: form.name, tag: form.tag, beds };
     const next = buildings.map((b) => b.id!==buildingId ? b : { ...b, updatedAt: new Date().toISOString(), zones: [...b.zones, zone] });
@@ -1032,6 +1109,8 @@ function App() {
   const active = buildings ? buildings.find((b)=>b.id===activeId) : null;
   const overall = buildings ? overallCounts(buildings) : { total:0, available:0 };
   const editingZoneObj = editZone && active ? active.zones.find((z)=>z.id===editZone.zoneId) : null;
+  const dirtyKeys = React.useMemo(() => new Set(Object.keys(pendingChanges)), [pendingChanges]);
+  const pendingCount = Object.keys(pendingChanges).length;
 
   return (
     <div className="app">
@@ -1101,10 +1180,12 @@ function App() {
                   <ZoneCard key={zone.id} zone={zone}
                     onToggleBed={(bedId)=>toggleBed(active.id, zone.id, bedId)}
                     onNameChange={(bedId,v)=>changeBedName(active.id, zone.id, bedId, v)}
-                    onNameBlur={()=>flushWriteName(active.id, zone.id)}
+                    onNameBlur={()=>{}}
                     onToggleTag={(bedId,tagId)=>toggleCaseTag(active.id, zone.id, bedId, tagId)}
                     onStayTypeChange={(bedId,v)=>changeStayType(active.id, zone.id, bedId, v)}
+                    onPriceChange={(bedId,v)=>changePackagePrice(active.id, zone.id, bedId, v)}
                     onEdit={()=>setEditZone({buildingId:active.id, zoneId:zone.id})}
+                    dirtyKeys={dirtyKeys}
                     expandedBeds={expandedBeds} onToggleExpand={toggleExpand} />
                 ))}
                 <button className="add-zone-card" onClick={()=>setAddZoneFor(active.id)}>
@@ -1201,6 +1282,18 @@ function App() {
         {lastSync ? `ซิงก์ล่าสุด ${lastSync.toLocaleTimeString("th-TH")} · ` : ""}
         {connected ? `เชื่อมต่อ Google Sheet ทุกสาขา (อัปเดตทุก ${POLL_MS/1000} วินาที)` : "โหมดพรีวิว (ไม่บันทึกถาวร)"}
       </div>
+
+      {pendingCount > 0 && (
+        <div className="commit-bar">
+          <span className="commit-bar-label"><span className="dirty-dot" /> แก้ไขแล้ว {pendingCount} เตียง ยังไม่บันทึก</span>
+          <div className="row" style={{gap:8}}>
+            <button className="discard-btn" onClick={discardPendingChanges} disabled={committing}>ยกเลิก</button>
+            <button className="commit-btn" onClick={commitPendingChanges} disabled={committing || connError}>
+              {committing ? "กำลังบันทึก..." : `บันทึกรายการ (${pendingCount})`}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
